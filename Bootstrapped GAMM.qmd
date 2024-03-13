@@ -8,9 +8,9 @@ editor: visual
 
 Checked 02/05/2023
 
-Similar to my previous blog on deriving \'Effect Concentrations\' from GLMMs, this blog details a way to code bootstrapped 95% CI from GAMMs and their bootstrapped ECx. I know of no method to extract ECx from GAMMs analytically like we can for GLMMs, so here I interpolate from the predictions. This isn\'t super accurate but the error will be quite small -- make sure to keep the prediction length \>100 though.
+Similar to my previous blog on deriving 'Effect Concentrations' from GLMMs, this blog details a way to code bootstrapped 95% CI from GAMMs and their bootstrapped ECx. I know of no method to extract ECx from GAMMs analytically like we can for GLMMs, so here I interpolate from the predictions. This isn't super accurate but the error will be quite small -- make sure to keep the prediction length \>100 though.
 
-This dataset doesn\'t really require a GAMM, I\'ve just used it for demonstration purposes. I\'ve added an observational-level random effect, which is typically used for tank experiments.
+This dataset doesn't really require a GAMM, I've just used it for demonstration purposes. I've added an observational-level random effect, which is typically used for tank experiments.
 
 Lets load in some data.
 
@@ -25,10 +25,10 @@ library(lattice)
 library(MASS)
 library(MuMIn)
 data1 <- read.table(file="https://raw.githubusercontent.com/gerard-ricardo/data/master/2015_uppersurface", header= TRUE, dec=",")
-data1
+#data1
 # 2 Labeling and wrangling -----------------------------------------------
-data1$sus.sed <- as.numeric(as.character(data1$sus.sed))
-data1$log.x <- log10(data1$sus.sed) #log10 trans
+data1$sus_sed <- as.numeric(as.character(data1$sus.sed))
+data1$log.x <- log10(data1$sus_sed) #log10 trans
 data1$fert <- as.numeric(as.character(data1$fert))
 data1$suc <- data1$fert
 data1$tot <- as.numeric(as.character(data1$tot))
@@ -36,9 +36,9 @@ data1$obs <- factor(formatC(1:nrow(data1), flag="0", width = 3))# unique tank ID
 data1$log.x <- ifelse(data1$log.x < 0.1, 0, data1$log.x)  #Replace neg with zero
 ```
 
-Next let\'s fit a regular GAMM for demonstration sake. Here we are fitting a GAMM, and predicting along raw.x in the data.frame df1. We convert the predicted SE to approximate 95% CI by multiplying them by 1.96.
+Next let's fit a regular GAMM for demonstration sake. Here we are fitting a GAMM, and predicting along raw.x in the data.frame df1. We convert the predicted SE to approximate 95% CI by multiplying them by 1.96.
 
-```{r}
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
 m2.gamm<-gamm(cbind(suc,(tot - suc))~s(log.x, fx = F, k = 3),
               random = list(obs=~1),
               family=binomial,
@@ -56,7 +56,7 @@ lines(df1$log.x, df1$up.ci, type = "l", lwd = 2,  xaxt = "n", las = 1) #plot dat
 lines(df1$log.x, df1$lo.ci, type = "l", lwd = 2,  xaxt = "n", las = 1) #plot lower 95% CI
 ```
 
-The code used to interpolate the ECx is below. This function calculates the ECx from the maximum of the curve. It simply works by finding the nearest value in the prediction data.frame to X% of the maximum response, and then the corresponding value in the predictor column. If you have a unimodal \'hump-shaped\' trend, it will only calculate one ECx (I think).
+The code used to interpolate the ECx is below. This function calculates the ECx from the maximum of the curve. It simply works by finding the nearest value in the prediction data.frame to X% of the maximum response, and then the corresponding value in the predictor column. If you have a unimodal 'hump-shaped' trend, it will only calculate one ECx (I think).
 
 ```{r}
 ecx.interp <- function(ecx, df1) {
@@ -72,7 +72,7 @@ ecx.interp <- function(ecx, df1) {
 ecx.interp(0.5, df1) #this is the ECx calculate between the top and 0.
 ```
 
-Ok, now for a GAMM with bootstrapped 95% CI. Make sure to keep sims = as multiple of 200, otherwise the CIs can\'t calculate properly. Ideally your finally attempt will want around 1000 otherwise the CIs will look wobbly, like below.
+Ok, now for a GAMM with bootstrapped 95% CI. Make sure to keep sims = as multiple of 200, otherwise the CIs can't calculate properly. Ideally your finally attempt will want around 1000 otherwise the CIs will look wobbly, like below.
 
 Here we have the code above wrapped into a function called m2.gamm, which outputs the prediction. In the for-loop, we resample the raw data.frame and then apply this function. The prediction is stored into a list and then a data.frame called df3. This data.frame is then ordered and next subset by the 0.025 (2.5%) or 0.975 (97.5%) columns. Because columns are integers, make sure your sims multiplied by these proportions result in an integer e.g. 200.
 
@@ -84,7 +84,8 @@ fit_gam <- function(resampled) {
                   random = list(obs = ~1),
                   family = binomial,
                   data = resampled,
-                  method = "REML")
+                  method = "REML",
+                  verbosePQL = F)
   pred.md1 <- predict(m2.gamm, newdata=df1, type = "response",se.fit=T)
   out = unname(pred.md1$fit)
   # lst[[1]] = dd
@@ -104,43 +105,46 @@ for (i in 1:sims) {
   lst[[i]] <- out
 }
 
-lst  #returns all predictions in list
+#lst  #returns all predictions in list
 df3 <- do.call(rbind, lst)  #add this to 'loop into a list'
-df3 #so all the predicted fits from the x simulations are stored as rows in this list
+#df3 #so all the predicted fits from the x simulations are stored as rows in this list
 ```
 
 Now lets see how each resampled curve looks
 
 ```{r}
-#plot output of predictions
+# plot output of predictions
 df4 <- as.data.frame(lst)
-df4$log.x = df1$log.x
-df4$log.x
+df4$log.x <- df1$log.x
+# df4$log.x
 library(tidyverse)
-data1.long = df4 %>% tidyr::pivot_longer(-log.x,  names_to = "factors" ,values_to = "meas") %>% data.frame() #keep vec.x, add all other columns to factors , add all their values to meas)
-ggplot(data1.long, aes(x = log.x, y = meas, color = 'steelblue1', group = factors)) +
+data1.long <- df4 %>%
+  tidyr::pivot_longer(-log.x, names_to = "factors", values_to = "meas") %>%
+  data.frame() # keep vec.x, add all other columns to factors , add all their values to meas)
+ggplot(data1.long, aes(x = log.x, y = meas, color = "steelblue1", group = factors)) +
   geom_line() +
-  #geom_point(aes(y = meas)) +
+  # geom_point(aes(y = meas)) +
   labs(x = "Predictor", y = "Response", title = "Multiple Model Fits") +
-  theme_minimal() + theme(legend.position="none")
+  theme_minimal() +
+  theme(legend.position = "none")
 ```
 
-Let\'s take the 2.5% and the 97.5% lines to see the bootstrapped CIs
+Let's take the 2.5% and the 97.5% lines to see the bootstrapped CIs
 
 ```{r}
-#ordering and take the bottom 2.5% and top 97.5% lines
-eta = 0.5*sims
-lowerCI = 0.025*sims
-dataCI = 0.975*sims
-bb_se1<-apply(df3,2,function(X) X[order(X)]) #orders the predictions from lowest to highest
-df1$boot.pred = bb_se1[eta,] #find the bottom 2.5%
-df1$boot_lo = bb_se1[lowerCI,] #find the bottom 2.5%
-df1$boot_up = bb_se1[dataCI,] #find the top 2.5%
-#plotting
-plot(data1$log.x,(data1$suc / data1$tot),main="GAM") #second plot
-lines(df1$log.x, df1$boot.pred, type = "l", lwd = 2, col = 2, xaxt = "n", las = 1) #plot model mean line
-lines(df1$log.x, df1$boot_lo, type = "l", lwd = 2,  xaxt = "n", las = 1) #plot data2 95% CI
-lines(df1$log.x, df1$boot_up, type = "l", lwd = 2,  xaxt = "n", las = 1) #plot lower 95% CI
+# ordering and take the bottom 2.5% and top 97.5% lines
+eta <- 0.5 * sims
+lowerCI <- 0.025 * sims
+dataCI <- 0.975 * sims
+bb_se1 <- apply(df3, 2, function(X) X[order(X)]) # orders the predictions from lowest to highest
+df1$boot.pred <- bb_se1[eta, ] # find the bottom 2.5%
+df1$boot_lo <- bb_se1[lowerCI, ] # find the bottom 2.5%
+df1$boot_up <- bb_se1[dataCI, ] # find the top 2.5%
+# plotting
+plot(data1$log.x, (data1$suc / data1$tot), main = "GAM") # second plot
+lines(df1$log.x, df1$boot.pred, type = "l", lwd = 2, col = 2, xaxt = "n", las = 1) # plot model mean line
+lines(df1$log.x, df1$boot_lo, type = "l", lwd = 2, xaxt = "n", las = 1) # plot data2 95% CI
+lines(df1$log.x, df1$boot_up, type = "l", lwd = 2, xaxt = "n", las = 1) # plot lower 95% CI
 ```
 
 **With that in mind, we can now bootstrap the ECx.**
@@ -159,80 +163,84 @@ Ok. Let resample just once to see how it look, but keeping everything in a funct
 
 ```{r}
 set.seed(123)
-lst1 = list() #initial list
+lst1 <- list() # initial list
 fit_gam2 <- function(resampled, ecx) {
   m2.gamm <- gamm(cbind(suc, (tot - suc)) ~ s(log.x, fx = F, k = 3),
-                  random = list(obs = ~1),
-                  family = binomial,
-                  data = resampled,
-                  method = "REML")
-  pred<- predict(m2.gamm, newdata = df1, type = "response",se.fit=T)
-  df2 = data.frame(log.x = df1$log.x, pred = pred$fit)
+    random = list(obs = ~1),
+    family = binomial,
+    data = resampled,
+    method = "REML",
+    verbosePQL = F
+  )
+  pred <- predict(m2.gamm, newdata = df1, type = "response", se.fit = T)
+  df2 <- data.frame(log.x = df1$log.x, pred = pred$fit)
   ecx.interp2 <- function(ecx, df2) {
     inhibx <- max(df2$pred) * ecx
     nearest_idx <- which.min(abs(df2$pred - inhibx))
-    ecx = df2$log.x[nearest_idx]
+    ecx <- df2$log.x[nearest_idx]
     return(ecx)
   }
-  out1 = ecx.interp2(ecx, df2)
-  out = unname(out1)
+  out1 <- ecx.interp2(ecx, df2)
+  out <- unname(out1)
   # lst[[1]] = dd
   # return(lst)
   return(out)
-} #gam function returns prediction
+} # gam function returns prediction
 fit_gam2(resampled_data, 0.5)   
 ```
 
-Now let\'s run it in a loop for each resample
+Now let's run it in a loop for each resample
 
 ```{r}
-#Now run in loop for sims
-ecx = 0.5
-sims = 200
-for(i in 1:sims) {
+# Now run in loop for sims
+ecx <- 0.5
+sims <- 200
+for (i in 1:sims) {
   # resampled  = data2[sample(nrow(data2), replace = TRUE), ]
   # out = fit_gam2(resampled, ecx)
   # lst[[i]] = out
-  
-  
+
+
   resampled_resid <- resid_gam[sample(length(resid_gam), replace = TRUE)]
   new_response <- m2.gamm$gam$fitted.values + resampled_resid
   resampled_data <- data1
-  resampled_data$suc <- round(pmin(pmax(new_response * resampled_data$tot, 0), resampled_data$tot)) #pmax prevents values less than 0
+  resampled_data$suc <- round(pmin(pmax(new_response * resampled_data$tot, 0), resampled_data$tot)) # pmax prevents values less than 0
   out <- fit_gam2(resampled_data, ecx)
   lst[[i]] <- out
 }
-lst  #returns all predictions in list
-df3 = unlist(lst)
-df3
+# lst  #returns all predictions in list
+df3 <- unlist(lst)
+# df3
 hist(df3)
-plot(density(df3)) #density plot
-df4 = df3[order(df3)]
-df1$boot.pred = df4[eta] #find the bottom 2.5%
-df1$boot_lo = df4[lowerCI] #find the bottom 2.5%
-df1$boot_up = df4[dataCI] #find the top 2.5%
-df1
+plot(density(df3)) # density plot
+df4 <- df3[order(df3)]
+df1$boot.pred <- df4[eta] # find the bottom 2.5%
+df1$boot_lo <- df4[lowerCI] # find the bottom 2.5%
+df1$boot_up <- df4[dataCI] # find the top 2.5%
+# df1
+
 ```
 
 # Plotting
 
-```{r}
+```{r, message=FALSE, warning=FALSE, results='hide'}
 library(ggplot2)
 library(tidybayes)
-df5 = data.frame(ecx = df3)
-p1 = ggplot(df5, aes(x=ecx))+geom_density(aes(fill = 'steelblue4'), alpha=0.3)+
-  stat_pointinterval(aes(y = 0.00, x = ecx),.width = c(.66, .95))
+df5 <- data.frame(ecx = df3)
+p1 <- ggplot(df5, aes(x = ecx)) +
+  geom_density(aes(fill = "steelblue4"), alpha = 0.3) +
+  stat_pointinterval(aes(y = 0.00, x = ecx), .width = c(.66, .95))+
 theme_light()
-p1 = p1+scale_fill_manual( values = c("steelblue4"))+
-  scale_color_manual( values = c("steelblue4"))+theme(legend.position="none")#nice
-p1 = p1 + scale_y_continuous(name ="Density")
-p1 = p1 + coord_cartesian(ylim = c(0.0, 3.5))
+p1 <- p1 + scale_fill_manual(values = c("steelblue4")) +
+  scale_color_manual(values = c("steelblue4")) + theme(legend.position = "none") # 
+p1 <- p1 + scale_y_continuous(name = "Density")
+p1 <- p1 + coord_cartesian(ylim = c(0.0, 3.5))
 p1
 ```
 
 And if you want everything wrapped into a function
 
-```{r}
+```{r, eval=FALSE}
 gamm_ecx <- function(data1, ecx) {
   library(mgcv)
   library(lattice)
@@ -240,68 +248,70 @@ gamm_ecx <- function(data1, ecx) {
   library(MuMIn)
   data1$suc <- as.numeric(as.character(data1$suc))
   data1$tot <- as.numeric(as.character(data1$tot))
-  data1$obs <- factor(formatC(1:nrow(data1), flag="0", width = 3))# unique tank ID for later on
-lst1 = list() #initial list
-data1$log.x <- ifelse(data1$log.x < 0.1, 0, data1$log.x)  #Replace neg with zero
-set.seed(123)
-m2.gamm<-gamm(cbind(suc,(tot - suc))~s(log.x, fx = F, k = 3),
-              random = list(obs=~1),
-              family=binomial,
-              data=data1,
-              method = "REML") #
-resid_gam <- residuals(m2.gamm$gam, type = "response")
-df1 <- data.frame(log.x = seq(min(data1$log.x), max(data1$log.x), length = 30)) #setting up  new  data frame (df) defining log.x values to run 
-
-fit_gam2 <- function(resampled, ecx) {
+  data1$obs <- factor(formatC(1:nrow(data1), flag = "0", width = 3)) # unique tank ID for later on
+  lst1 <- list() # initial list
+  data1$log.x <- ifelse(data1$log.x < 0.1, 0, data1$log.x) # Replace neg with zero
+  set.seed(123)
   m2.gamm <- gamm(cbind(suc, (tot - suc)) ~ s(log.x, fx = F, k = 3),
-                  random = list(obs = ~1),
-                  family = binomial,
-                  data = resampled,
-                  method = "REML")
-  pred<- predict(m2.gamm, newdata = df1, type = "response",se.fit=T)
-  df2 = data.frame(log.x = df1$log.x, pred = pred$fit)
-  ecx.interp2 <- function(ecx, df2) {
-    inhibx <- max(df2$pred) * ecx
-    nearest_idx <- which.min(abs(df2$pred - inhibx))
-    ecx = df2$log.x[nearest_idx]
-    return(ecx)
+    random = list(obs = ~1),
+    family = binomial,
+    data = data1,
+    method = "REML", verbosePQL = F
+  ) #
+  resid_gam <- residuals(m2.gamm$gam, type = "response")
+  df1 <- data.frame(log.x = seq(min(data1$log.x), max(data1$log.x), length = 30)) # setting up  new  data frame (df) defining log.x values to run
+
+  fit_gam2 <- function(resampled, ecx) {
+    m2.gamm <- gamm(cbind(suc, (tot - suc)) ~ s(log.x, fx = F, k = 3),
+      random = list(obs = ~1),
+      family = binomial,
+      data = resampled,
+      method = "REML", verbosePQL = F
+    )
+    pred <- predict(m2.gamm, newdata = df1, type = "response", se.fit = T)
+    df2 <- data.frame(log.x = df1$log.x, pred = pred$fit)
+    ecx.interp2 <- function(ecx, df2) {
+      inhibx <- max(df2$pred) * ecx
+      nearest_idx <- which.min(abs(df2$pred - inhibx))
+      ecx <- df2$log.x[nearest_idx]
+      return(ecx)
+    }
+    out1 <- ecx.interp2(ecx, df2)
+    out <- unname(out1)
+    return(out)
+  } # gam function returns prediction
+  # fit_gam2(resampled_data, 0.5)   #gives the same asnwer as above but in a function
+
+  sims <- 200
+  lst <- list() # initial list
+  for (i in 1:sims) {
+    resampled_resid <- resid_gam[sample(length(resid_gam), replace = TRUE)]
+    new_response <- m2.gamm$gam$fitted.values + resampled_resid
+    resampled_data <- data1
+    resampled_data$suc <- round(pmin(pmax(new_response * resampled_data$tot, 0), resampled_data$tot)) # pmax prevents values less than 0
+    out <- fit_gam2(resampled_data, ecx)
+    lst[[i]] <- out
   }
-  out1 = ecx.interp2(ecx, df2)
-  out = unname(out1)
-  return(out)
-} #gam function returns prediction
-#fit_gam2(resampled_data, 0.5)   #gives the same asnwer as above but in a function
+  lst # returns all predictions in list
+  df3 <- unlist(lst)
+  #df3
+  hist(df3)
+  plot(density(df3)) # density plot
+  df4 <- df3[order(df3)]
+  eta <- 0.5 * sims
+  lowerCI <- 0.025 * sims
+  dataCI <- 0.975 * sims
 
-sims = 200
-lst = list() #initial list
-for(i in 1:sims) {
-  resampled_resid <- resid_gam[sample(length(resid_gam), replace = TRUE)]
-  new_response <- m2.gamm$gam$fitted.values + resampled_resid
-  resampled_data <- data1
-  resampled_data$suc <- round(pmin(pmax(new_response * resampled_data$tot, 0), resampled_data$tot)) #pmax prevents values less than 0
-  out <- fit_gam2(resampled_data, ecx)
-  lst[[i]] <- out
-}
-lst  #returns all predictions in list
-df3 = unlist(lst)
-df3
-hist(df3)
-plot(density(df3)) #density plot
-df4 = df3[order(df3)]
-eta = 0.5*sims
-lowerCI = 0.025*sims
-dataCI = 0.975*sims
-
-boot.pred = df4[eta] #find the bottom 2.5%
-boot_lo = df4[lowerCI] #find the bottom 2.5%
-boot_up = df4[dataCI] #find the top 2.5%
-df5 = data.frame(boot.pred, boot_lo, boot_up)
-df5
-output_list = list(df4, df5)
-return(output_list)
+  boot.pred <- df4[eta] # find the bottom 2.5%
+  boot_lo <- df4[lowerCI] # find the bottom 2.5%
+  boot_up <- df4[dataCI] # find the top 2.5%
+  df5 <- data.frame(boot.pred, boot_lo, boot_up)
+  #df5
+  output_list <- list(df4, df5)
+  return(output_list)
 }
 
-boot_ecx = gamm_ecx(data1, 0.5)
+boot_ecx <- gamm_ecx(data1, 0.5)
 boot_ecx[[1]]
 boot_ecx[[2]]
 ```
