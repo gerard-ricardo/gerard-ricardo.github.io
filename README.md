@@ -23,4 +23,4 @@ All the figures for the `Bootstrapped_GAMM.html` analysis are located in the `Bo
 
 ### How to View
 
-To view the analysis, simply open the `Bootstrapped_GAMM.html` file in your web browser. All content, including images, is self-contained within this directory structure.
+To view the analysis, simply download the project locally and open the `Bootstrapped_GAMM.html` file in your web browser. All content, including images, is self-contained within this directory structure.
